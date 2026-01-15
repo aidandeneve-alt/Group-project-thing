@@ -466,38 +466,57 @@ function generateTasksFromAssignment() {
 }
 
 async function callGeminiAPI(fileContent, assignmentNumber) {
-    const prompt = `Analyze this assignment document and generate specific, actionable tasks for a team of 4 members: Tristan, Aidan, Micheala, and Leandro.
+    // Limit content to first 5000 characters to prevent token issues
+    const truncatedContent = fileContent.length > 5000 ? fileContent.substring(0, 5000) + "..." : fileContent;
+    
+    const prompt = `You are analyzing an assignment document to create a manageable set of tasks for a 4-person team.
 
 Assignment Number: ${assignmentNumber}
 
-Document Content:
-${fileContent}
+Document Content (truncated if too long):
+${truncatedContent}
+
+CRITICAL INSTRUCTIONS:
+1. Generate ONLY 5-10 meaningful tasks total
+2. Each task must be a complete, actionable activity
+3. DO NOT create tasks for individual letters, words, or sentences
+4. Focus on major assignment components, sections, or requirements
+5. Group related work into single tasks
+
+Examples of GOOD tasks:
+- "Write the introduction section (Assignment 1.1)"
+- "Complete research for literature review"
+- "Create PowerPoint slides for presentation"
+- "Review and edit final draft"
+
+Examples of BAD tasks (DO NOT create these):
+- "Write letter 'a'"
+- "Read word 'the'"
+- "Complete sentence one"
+- "Process paragraph 2"
 
 Please:
-1. Identify the main assignment and any sub-assignments or parts
-2. Break down the work into specific, actionable tasks
-3. Assign each task to one of the 4 team members (distribute workload evenly)
-4. Include assignment numbers and sub-assignment references in task descriptions
-5. Make tasks specific and measurable (not vague)
-6. Consider dependencies between tasks
+1. Identify the main assignment requirements
+2. Break down into 5-10 major tasks (not micro-tasks)
+3. Assign each task to one team member (distribute workload evenly)
+4. Include assignment references where applicable
+5. Make tasks specific but comprehensive
 
-Return the response in this exact JSON format:
+Return ONLY this JSON format (no extra text):
 {
   "tasks": [
     {
-      "description": "Complete research for Assignment 1.1 - literature review",
+      "description": "Complete research and literature review for Assignment 1",
       "assignee": "Tristan",
       "priority": "high"
     },
     {
-      "description": "Write introduction section for Assignment 1.2",
+      "description": "Write introduction and methodology sections",
       "assignee": "Aidan", 
-      "priority": "medium"
+      "priority": "high"
     }
   ]
-}
-
-Focus on creating practical tasks that team members can actually complete.`;
+}`;
 
     try {
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`, {
@@ -529,11 +548,19 @@ Focus on creating practical tasks that team members can actually complete.`;
         
         const aiResponse = JSON.parse(jsonMatch[0]);
         
+        // Validate and limit tasks
+        if (!aiResponse.tasks || !Array.isArray(aiResponse.tasks)) {
+            throw new Error('Invalid AI response format');
+        }
+        
+        // Limit to maximum 10 tasks
+        const limitedTasks = aiResponse.tasks.slice(0, 10);
+        
         // Convert to our task format
-        const generatedTasks = aiResponse.tasks.map((task, index) => ({
+        const generatedTasks = limitedTasks.map((task, index) => ({
             id: Date.now() + index,
             text: `[Assignment ${assignmentNumber}] ${task.description}`,
-            assignee: task.assignee,
+            assignee: task.assignee || 'Unassigned',
             completed: false,
             createdAt: new Date().toISOString(),
             isGenerated: true,
@@ -549,7 +576,7 @@ Focus on creating practical tasks that team members can actually complete.`;
         renderTasks();
         updateStatistics();
         
-        showNotification(`AI generated ${generatedTasks.length} tasks for Assignment ${assignmentNumber}`, 'success');
+        showNotification(`AI generated ${generatedTasks.length} meaningful tasks for Assignment ${assignmentNumber}`, 'success');
         setGenerateButtonState('ready');
         
     } catch (error) {
