@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Group Project Task Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .task-item { transition: all 0.3s ease; }
+        .task-item:hover { transform: translateX(4px); }
+        .fade-in { animation: fadeIn 0.5s ease-in; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-7xl">
+        <!-- Header -->
+        <header class="text-center mb-10">
+            <h1 class="text-4xl font-bold text-gray-800 mb-2">
+                <i class="fas fa-tasks text-indigo-600 mr-3"></i>
+                Group Project Task Manager
+            </h1>
+            <p class="text-gray-600">Collaborate, track progress, and stay organized</p>
+        </header>
+
+        <!-- Team Members Section -->
+        <section class="bg-white rounded-xl shadow-lg p-6 mb-8 fade-in">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">
+                <i class="fas fa-users text-indigo-500 mr-2"></i>
+                Team Members
+            </h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="text-center p-4 bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg">
+                    <div class="w-16 h-16 bg-blue-500 rounded-full mx-auto mb-2 flex items-center justify-center text-white text-xl font-bold">
+                        T
+                    </div>
+                    <p class="font-medium text-gray-800">Tristan</p>
+                </div>
+                <div class="text-center p-4 bg-gradient-to-r from-green-50 to-green-100 rounded-lg">
+                    <div class="w-16 h-16 bg-green-500 rounded-full mx-auto mb-2 flex items-center justify-center text-white text-xl font-bold">
+                        A
+                    </div>
+                    <p class="font-medium text-gray-800">Aidan</p>
+                </div>
+                <div class="text-center p-4 bg-gradient-to-r from-purple-50 to-purple-100 rounded-lg">
+                    <div class="w-16 h-16 bg-purple-500 rounded-full mx-auto mb-2 flex items-center justify-center text-white text-xl font-bold">
+                        M
+                    </div>
+                    <p class="font-medium text-gray-800">Micheala</p>
+                </div>
+                <div class="text-center p-4 bg-gradient-to-r from-orange-50 to-orange-100 rounded-lg">
+                    <div class="w-16 h-16 bg-orange-500 rounded-full mx-auto mb-2 flex items-center justify-center text-white text-xl font-bold">
+                        L
+                    </div>
+                    <p class="font-medium text-gray-800">Leandro</p>
+                </div>
+            </div>
+        </section>
+
+        <div class="grid md:grid-cols-2 gap-8">
+            <!-- Task List Section -->
+            <section class="bg-white rounded-xl shadow-lg p-6 fade-in">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4">
+                    <i class="fas fa-clipboard-list text-indigo-500 mr-2"></i>
+                    Task List
+                </h2>
+                
+                <!-- Add Task Form -->
+                <div class="mb-6">
+                    <div class="flex gap-2">
+                        <input 
+                            type="text" 
+                            id="taskInput" 
+                            placeholder="Enter a new task..."
+                            class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        >
+                        <select id="assigneeSelect" class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <option value="">Assign to...</option>
+                            <option value="Tristan">Tristan</option>
+                            <option value="Aidan">Aidan</option>
+                            <option value="Micheala">Micheala</option>
+                            <option value="Leandro">Leandro</option>
+                        </select>
+                        <button 
+                            onclick="addTask()"
+                            class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                        >
+                            <i class="fas fa-plus mr-2"></i>Add
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Task Filters -->
+                <div class="mb-4 flex gap-2">
+                    <button onclick="filterTasks('all')" class="filter-btn px-3 py-1 text-sm rounded-full bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors">
+                        All
+                    </button>
+                    <button onclick="filterTasks('pending')" class="filter-btn px-3 py-1 text-sm rounded-full bg-yellow-100 text-yellow-700 hover:bg-yellow-200 transition-colors">
+                        Pending
+                    </button>
+                    <button onclick="filterTasks('completed')" class="filter-btn px-3 py-1 text-sm rounded-full bg-green-100 text-green-700 hover:bg-green-200 transition-colors">
+                        Completed
+                    </button>
+                </div>
+
+                <!-- Tasks Container -->
+                <div id="tasksContainer" class="space-y-2 max-h-96 overflow-y-auto">
+                    <!-- Tasks will be dynamically added here -->
+                </div>
+            </section>
+
+            <!-- Update Log Section -->
+            <section class="bg-white rounded-xl shadow-lg p-6 fade-in">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4">
+                    <i class="fas fa-history text-indigo-500 mr-2"></i>
+                    Update Log
+                </h2>
+                
+                <!-- Add Update Form -->
+                <div class="mb-6">
+                    <div class="flex gap-2">
+                        <input 
+                            type="text" 
+                            id="updateInput" 
+                            placeholder="What did you work on?"
+                            class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        >
+                        <select id="updateAuthorSelect" class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <option value="">Who...</option>
+                            <option value="Tristan">Tristan</option>
+                            <option value="Aidan">Aidan</option>
+                            <option value="Micheala">Micheala</option>
+                            <option value="Leandro">Leandro</option>
+                        </select>
+                        <button 
+                            onclick="addUpdate()"
+                            class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                        >
+                            <i class="fas fa-plus mr-2"></i>Add
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Updates Container -->
+                <div id="updatesContainer" class="space-y-3 max-h-96 overflow-y-auto">
+                    <!-- Updates will be dynamically added here -->
+                </div>
+            </section>
+        </div>
+
+        <!-- Statistics Section -->
+        <section class="mt-8 bg-white rounded-xl shadow-lg p-6 fade-in">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">
+                <i class="fas fa-chart-bar text-indigo-500 mr-2"></i>
+                Project Statistics
+            </h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="text-center p-4 bg-blue-50 rounded-lg">
+                    <div class="text-3xl font-bold text-blue-600" id="totalTasks">0</div>
+                    <div class="text-sm text-gray-600">Total Tasks</div>
+                </div>
+                <div class="text-center p-4 bg-green-50 rounded-lg">
+                    <div class="text-3xl font-bold text-green-600" id="completedTasks">0</div>
+                    <div class="text-sm text-gray-600">Completed</div>
+                </div>
+                <div class="text-center p-4 bg-yellow-50 rounded-lg">
+                    <div class="text-3xl font-bold text-yellow-600" id="pendingTasks">0</div>
+                    <div class="text-sm text-gray-600">Pending</div>
+                </div>
+                <div class="text-center p-4 bg-purple-50 rounded-lg">
+                    <div class="text-3xl font-bold text-purple-600" id="totalUpdates">0</div>
+                    <div class="text-sm text-gray-600">Updates</div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
