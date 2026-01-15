@@ -4,7 +4,7 @@ let updates = JSON.parse(localStorage.getItem('updates')) || [];
 let currentFilter = 'all';
 let currentAssignment = JSON.parse(localStorage.getItem('currentAssignment')) || null;
 let uploadedFileContent = null;
-let geminiApiKey = localStorage.getItem('geminiApiKey') || '';
+let geminiApiKey = ''; // Clear old key to force using new one
 
 // Initialize the app
 document.addEventListener('DOMContentLoaded', function() {
@@ -525,7 +525,7 @@ Return ONLY this JSON format (no extra text):
 }`;
 
     try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -590,7 +590,7 @@ Return ONLY this JSON format (no extra text):
             message: error.message,
             status: error.status,
             apiKey: geminiApiKey ? `${geminiApiKey.substring(0, 10)}...` : 'missing',
-            endpoint: `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent`
+            endpoint: `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`
         });
         
         let errorMessage = error.message;
