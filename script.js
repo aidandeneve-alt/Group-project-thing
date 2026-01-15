@@ -4,6 +4,7 @@ let updates = JSON.parse(localStorage.getItem('updates')) || [];
 let currentFilter = 'all';
 let currentAssignment = JSON.parse(localStorage.getItem('currentAssignment')) || null;
 let uploadedFileContent = null;
+let geminiApiKey = localStorage.getItem('geminiApiKey') || '';
 
 // Initialize the app
 document.addEventListener('DOMContentLoaded', function() {
@@ -17,6 +18,11 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('assignmentSelect').value = currentAssignment.number;
     }
     
+    // Initialize API key
+    if (geminiApiKey) {
+        document.getElementById('geminiApiKey').value = geminiApiKey;
+    }
+    
     // Add enter key support for inputs
     document.getElementById('taskInput').addEventListener('keypress', function(e) {
         if (e.key === 'Enter') addTask();
@@ -24,6 +30,11 @@ document.addEventListener('DOMContentLoaded', function() {
     
     document.getElementById('updateInput').addEventListener('keypress', function(e) {
         if (e.key === 'Enter') addUpdate();
+    });
+    
+    // Add API key input listener
+    document.getElementById('geminiApiKey').addEventListener('input', function() {
+        checkGenerateButton();
     });
 });
 
@@ -74,6 +85,33 @@ function deleteTask(id) {
     renderTasks();
     updateStatistics();
     showNotification('Task deleted', 'info');
+}
+
+function confirmWipeAllTasks() {
+    if (tasks.length === 0) {
+        showNotification('No tasks to wipe', 'info');
+        return;
+    }
+    
+    // Create confirmation dialog
+    const confirmed = confirm(
+        `⚠️ WARNING: This will permanently delete ALL ${tasks.length} tasks!\n\n` +
+        `This action cannot be undone.\n\n` +
+        `Are you sure you want to continue?`
+    );
+    
+    if (confirmed) {
+        wipeAllTasks();
+    }
+}
+
+function wipeAllTasks() {
+    const taskCount = tasks.length;
+    tasks = [];
+    saveTasks();
+    renderTasks();
+    updateStatistics();
+    showNotification(`Successfully wiped ${taskCount} tasks`, 'success');
 }
 
 function filterTasks(filter) {
@@ -399,7 +437,8 @@ function clearAssignment() {
 
 function checkGenerateButton() {
     const btn = document.getElementById('generateTasksBtn');
-    btn.disabled = !(currentAssignment && uploadedFileContent);
+    const apiKey = document.getElementById('geminiApiKey').value.trim();
+    btn.disabled = !(currentAssignment && uploadedFileContent && apiKey);
 }
 
 function generateTasksFromAssignment() {
@@ -408,15 +447,100 @@ function generateTasksFromAssignment() {
         return;
     }
     
+    const apiKey = document.getElementById('geminiApiKey').value.trim();
+    if (!apiKey) {
+        showNotification('Please enter your Gemini API key', 'error');
+        document.getElementById('geminiApiKey').focus();
+        return;
+    }
+    
+    // Save API key
+    geminiApiKey = apiKey;
+    localStorage.setItem('geminiApiKey', geminiApiKey);
+    
+    // Show processing state
+    setGenerateButtonState('processing');
+    
+    // Call Gemini API
+    callGeminiAPI(uploadedFileContent, currentAssignment.number);
+}
+
+async function callGeminiAPI(fileContent, assignmentNumber) {
+    const prompt = `Analyze this assignment document and generate specific, actionable tasks for a team of 4 members: Tristan, Aidan, Micheala, and Leandro.
+
+Assignment Number: ${assignmentNumber}
+
+Document Content:
+${fileContent}
+
+Please:
+1. Identify the main assignment and any sub-assignments or parts
+2. Break down the work into specific, actionable tasks
+3. Assign each task to one of the 4 team members (distribute workload evenly)
+4. Include assignment numbers and sub-assignment references in task descriptions
+5. Make tasks specific and measurable (not vague)
+6. Consider dependencies between tasks
+
+Return the response in this exact JSON format:
+{
+  "tasks": [
+    {
+      "description": "Complete research for Assignment 1.1 - literature review",
+      "assignee": "Tristan",
+      "priority": "high"
+    },
+    {
+      "description": "Write introduction section for Assignment 1.2",
+      "assignee": "Aidan", 
+      "priority": "medium"
+    }
+  ]
+}
+
+Focus on creating practical tasks that team members can actually complete.`;
+
     try {
-        const generatedTasks = parseAssignmentContent(uploadedFileContent, currentAssignment.number);
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                contents: [{
+                    parts: [{
+                        text: prompt
+                    }]
+                }]
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`API Error: ${response.status} ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        const generatedText = data.candidates[0].content.parts[0].text;
         
-        if (generatedTasks.length === 0) {
-            showNotification('No tasks could be generated from the file content', 'warning');
-            return;
+        // Parse JSON from response
+        const jsonMatch = generatedText.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+            throw new Error('Could not parse AI response');
         }
         
-        // Add generated tasks to the task list
+        const aiResponse = JSON.parse(jsonMatch[0]);
+        
+        // Convert to our task format
+        const generatedTasks = aiResponse.tasks.map((task, index) => ({
+            id: Date.now() + index,
+            text: `[Assignment ${assignmentNumber}] ${task.description}`,
+            assignee: task.assignee,
+            completed: false,
+            createdAt: new Date().toISOString(),
+            isGenerated: true,
+            priority: task.priority || 'medium'
+        }));
+        
+        // Add tasks to the list
         generatedTasks.forEach(task => {
             tasks.unshift(task);
         });
@@ -425,11 +549,44 @@ function generateTasksFromAssignment() {
         renderTasks();
         updateStatistics();
         
-        showNotification(`Generated ${generatedTasks.length} tasks from ${currentAssignment.name}`, 'success');
+        showNotification(`AI generated ${generatedTasks.length} tasks for Assignment ${assignmentNumber}`, 'success');
+        setGenerateButtonState('ready');
         
     } catch (error) {
-        console.error('Error generating tasks:', error);
-        showNotification('Error generating tasks from file', 'error');
+        console.error('Gemini API Error:', error);
+        showNotification(`AI Error: ${error.message}`, 'error');
+        setGenerateButtonState('ready');
+    }
+}
+
+function setGenerateButtonState(state) {
+    const btn = document.getElementById('generateTasksBtn');
+    const btnText = document.getElementById('generateBtnText');
+    
+    switch(state) {
+        case 'processing':
+            btn.disabled = true;
+            btnText.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>AI Processing...';
+            break;
+        case 'ready':
+            btn.disabled = !(currentAssignment && uploadedFileContent && geminiApiKey);
+            btnText.innerHTML = '<i class="fas fa-brain mr-2"></i>Generate Tasks with AI';
+            break;
+    }
+}
+
+function toggleApiKeyVisibility() {
+    const input = document.getElementById('geminiApiKey');
+    const icon = document.getElementById('apiKeyToggleIcon');
+    
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.classList.remove('fa-eye');
+        icon.classList.add('fa-eye-slash');
+    } else {
+        input.type = 'password';
+        icon.classList.remove('fa-eye-slash');
+        icon.classList.add('fa-eye');
     }
 }
 
