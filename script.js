@@ -454,6 +454,12 @@ function generateTasksFromAssignment() {
         return;
     }
     
+    // Validate API key format
+    if (!apiKey.startsWith('AIza')) {
+        showNotification('Invalid API key format. Gemini keys start with "AIza"', 'error');
+        return;
+    }
+    
     // Save API key
     geminiApiKey = apiKey;
     localStorage.setItem('geminiApiKey', geminiApiKey);
@@ -519,7 +525,7 @@ Return ONLY this JSON format (no extra text):
 }`;
 
     try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -580,8 +586,23 @@ Return ONLY this JSON format (no extra text):
         setGenerateButtonState('ready');
         
     } catch (error) {
-        console.error('Gemini API Error:', error);
-        showNotification(`AI Error: ${error.message}`, 'error');
+        console.error('Gemini API Error Details:', {
+            message: error.message,
+            status: error.status,
+            apiKey: geminiApiKey ? `${geminiApiKey.substring(0, 10)}...` : 'missing',
+            endpoint: `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent`
+        });
+        
+        let errorMessage = error.message;
+        if (error.message.includes('404')) {
+            errorMessage = 'API endpoint not found. Check if the API key is valid and has Gemini API access.';
+        } else if (error.message.includes('403')) {
+            errorMessage = 'API key is invalid or lacks permissions. Please check your API key.';
+        } else if (error.message.includes('429')) {
+            errorMessage = 'API rate limit exceeded. Please try again later.';
+        }
+        
+        showNotification(`AI Error: ${errorMessage}`, 'error');
         setGenerateButtonState('ready');
     }
 }
