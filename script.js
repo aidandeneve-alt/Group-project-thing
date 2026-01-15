@@ -525,7 +525,7 @@ Return ONLY this JSON format (no extra text):
 }`;
 
     try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${geminiApiKey}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -590,7 +590,7 @@ Return ONLY this JSON format (no extra text):
             message: error.message,
             status: error.status,
             apiKey: geminiApiKey ? `${geminiApiKey.substring(0, 10)}...` : 'missing',
-            endpoint: `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`
+            endpoint: `https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent`
         });
         
         let errorMessage = error.message;
