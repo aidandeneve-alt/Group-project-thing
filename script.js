@@ -2,12 +2,20 @@
 let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
 let updates = JSON.parse(localStorage.getItem('updates')) || [];
 let currentFilter = 'all';
+let currentAssignment = JSON.parse(localStorage.getItem('currentAssignment')) || null;
+let uploadedFileContent = null;
 
 // Initialize the app
 document.addEventListener('DOMContentLoaded', function() {
     renderTasks();
     renderUpdates();
     updateStatistics();
+    
+    // Initialize assignment display
+    if (currentAssignment) {
+        displayCurrentAssignment();
+        document.getElementById('assignmentSelect').value = currentAssignment.number;
+    }
     
     // Add enter key support for inputs
     document.getElementById('taskInput').addEventListener('keypress', function(e) {
@@ -293,4 +301,213 @@ function showNotification(message, type) {
     setTimeout(() => {
         notification.remove();
     }, 3000);
+}
+
+// Assignment Management Functions
+function handleFileUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    // Check file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+        showNotification('File size exceeds 10MB limit', 'error');
+        event.target.value = '';
+        return;
+    }
+    
+    // Display file info
+    const fileInfo = document.getElementById('fileInfo');
+    fileInfo.innerHTML = `
+        <div class="flex items-center text-green-600">
+            <i class="fas fa-file mr-2"></i>
+            <span>${file.name} (${(file.size / 1024).toFixed(1)} KB)</span>
+        </div>
+    `;
+    
+    // Read file content
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        uploadedFileContent = e.target.result;
+        checkGenerateButton();
+        showNotification('File uploaded successfully', 'success');
+    };
+    
+    reader.onerror = function() {
+        showNotification('Error reading file', 'error');
+        uploadedFileContent = null;
+        checkGenerateButton();
+    };
+    
+    // Read based on file type
+    if (file.type === 'text/plain') {
+        reader.readAsText(file);
+    } else {
+        // For PDF, DOC, DOCX - we'll need to handle these differently
+        // For now, we'll read as text and handle errors gracefully
+        reader.readAsText(file);
+    }
+}
+
+function updateAssignment() {
+    const select = document.getElementById('assignmentSelect');
+    const assignmentNumber = select.value;
+    
+    if (!assignmentNumber) {
+        currentAssignment = null;
+        hideCurrentAssignment();
+        checkGenerateButton();
+        return;
+    }
+    
+    currentAssignment = {
+        number: assignmentNumber,
+        name: `Assignment ${assignmentNumber}`,
+        fileContent: uploadedFileContent
+    };
+    
+    saveCurrentAssignment();
+    displayCurrentAssignment();
+    checkGenerateButton();
+}
+
+function displayCurrentAssignment() {
+    if (!currentAssignment) return;
+    
+    const display = document.getElementById('currentAssignmentDisplay');
+    const text = document.getElementById('currentAssignmentText');
+    
+    display.classList.remove('hidden');
+    text.textContent = currentAssignment.name;
+}
+
+function hideCurrentAssignment() {
+    const display = document.getElementById('currentAssignmentDisplay');
+    display.classList.add('hidden');
+}
+
+function clearAssignment() {
+    currentAssignment = null;
+    uploadedFileContent = null;
+    document.getElementById('assignmentSelect').value = '';
+    document.getElementById('assignmentFile').value = '';
+    document.getElementById('fileInfo').innerHTML = '';
+    hideCurrentAssignment();
+    checkGenerateButton();
+    saveCurrentAssignment();
+    showNotification('Assignment cleared', 'info');
+}
+
+function checkGenerateButton() {
+    const btn = document.getElementById('generateTasksBtn');
+    btn.disabled = !(currentAssignment && uploadedFileContent);
+}
+
+function generateTasksFromAssignment() {
+    if (!currentAssignment || !uploadedFileContent) {
+        showNotification('Please upload a file and select an assignment first', 'error');
+        return;
+    }
+    
+    try {
+        const generatedTasks = parseAssignmentContent(uploadedFileContent, currentAssignment.number);
+        
+        if (generatedTasks.length === 0) {
+            showNotification('No tasks could be generated from the file content', 'warning');
+            return;
+        }
+        
+        // Add generated tasks to the task list
+        generatedTasks.forEach(task => {
+            tasks.unshift(task);
+        });
+        
+        saveTasks();
+        renderTasks();
+        updateStatistics();
+        
+        showNotification(`Generated ${generatedTasks.length} tasks from ${currentAssignment.name}`, 'success');
+        
+    } catch (error) {
+        console.error('Error generating tasks:', error);
+        showNotification('Error generating tasks from file', 'error');
+    }
+}
+
+function parseAssignmentContent(content, assignmentNumber) {
+    const generatedTasks = [];
+    const teamMembers = ['Tristan', 'Aidan', 'Micheala', 'Leandro'];
+    
+    // Split content into lines and clean up
+    const lines = content.split('\n').filter(line => line.trim().length > 0);
+    
+    // Common assignment task patterns
+    const taskPatterns = [
+        /(?:task|requirement|deliverable|step|part)\s*(\d+)[.:]?\s*(.+)/i,
+        /(\d+)[.)]\s*(.+)/,
+        /(?:complete|create|implement|design|develop|write|build|test)\s+(.+)/i,
+        /(?:section|chapter|module)\s*(\d+)[.:]?\s*(.+)/i
+    ];
+    
+    lines.forEach((line, index) => {
+        let taskText = null;
+        
+        // Try to match task patterns
+        for (const pattern of taskPatterns) {
+            const match = line.match(pattern);
+            if (match) {
+                taskText = match[2] || match[1];
+                break;
+            }
+        }
+        
+        // If no pattern matched, use the line as a task if it's substantial
+        if (!taskText && line.trim().length > 10) {
+            taskText = line.trim();
+        }
+        
+        if (taskText) {
+            // Clean up the task text
+            taskText = taskText.replace(/^\d+[.)]\s*/, '').trim();
+            
+            // Assign to team member (round-robin)
+            const assignee = teamMembers[index % teamMembers.length];
+            
+            generatedTasks.push({
+                id: Date.now() + index,
+                text: `[Assignment ${assignmentNumber}] ${taskText}`,
+                assignee: assignee,
+                completed: false,
+                createdAt: new Date().toISOString(),
+                isGenerated: true
+            });
+        }
+    });
+    
+    // If no tasks were found from patterns, create some generic tasks
+    if (generatedTasks.length === 0 && content.trim().length > 50) {
+        const genericTasks = [
+            'Review assignment requirements',
+            'Create initial draft',
+            'Complete research phase',
+            'Finalize submission',
+            'Review and edit'
+        ];
+        
+        genericTasks.forEach((taskText, index) => {
+            generatedTasks.push({
+                id: Date.now() + index,
+                text: `[Assignment ${assignmentNumber}] ${taskText}`,
+                assignee: teamMembers[index % teamMembers.length],
+                completed: false,
+                createdAt: new Date().toISOString(),
+                isGenerated: true
+            });
+        });
+    }
+    
+    return generatedTasks;
+}
+
+function saveCurrentAssignment() {
+    localStorage.setItem('currentAssignment', JSON.stringify(currentAssignment));
 }
