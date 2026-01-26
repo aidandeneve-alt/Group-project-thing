@@ -1,10 +1,7 @@
-// Data storage
+// Data storage - using localStorage with GitHub Pages compatibility
 let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
 let updates = JSON.parse(localStorage.getItem('updates')) || [];
 let currentFilter = 'all';
-let currentAssignment = JSON.parse(localStorage.getItem('currentAssignment')) || null;
-let uploadedFileContent = null;
-let geminiApiKey = ''; // Clear old key to force using new one
 
 // Initialize the app
 document.addEventListener('DOMContentLoaded', function() {
@@ -12,16 +9,8 @@ document.addEventListener('DOMContentLoaded', function() {
     renderUpdates();
     updateStatistics();
     
-    // Initialize assignment display
-    if (currentAssignment) {
-        displayCurrentAssignment();
-        document.getElementById('assignmentSelect').value = currentAssignment.number;
-    }
-    
-    // Initialize API key
-    if (geminiApiKey) {
-        document.getElementById('geminiApiKey').value = geminiApiKey;
-    }
+    // Simulate real-time updates by checking localStorage periodically
+    setInterval(checkForUpdates, 3000); // Check every 3 seconds
     
     // Add enter key support for inputs
     document.getElementById('taskInput').addEventListener('keypress', function(e) {
@@ -31,12 +20,26 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('updateInput').addEventListener('keypress', function(e) {
         if (e.key === 'Enter') addUpdate();
     });
-    
-    // Add API key input listener
-    document.getElementById('geminiApiKey').addEventListener('input', function() {
-        checkGenerateButton();
-    });
 });
+
+// Check for updates from other tabs/windows
+function checkForUpdates() {
+    const storedTasks = JSON.parse(localStorage.getItem('tasks')) || [];
+    const storedUpdates = JSON.parse(localStorage.getItem('updates')) || [];
+    
+    // Check if data has changed
+    if (JSON.stringify(storedTasks) !== JSON.stringify(tasks)) {
+        tasks = storedTasks;
+        renderTasks();
+        updateStatistics();
+    }
+    
+    if (JSON.stringify(storedUpdates) !== JSON.stringify(updates)) {
+        updates = storedUpdates;
+        renderUpdates();
+        updateStatistics();
+    }
+}
 
 // Task Management Functions
 function addTask() {
@@ -87,6 +90,17 @@ function deleteTask(id) {
     showNotification('Task deleted', 'info');
 }
 
+function filterTasks(filter) {
+    currentFilter = filter;
+    renderTasks();
+    
+    // Update filter button styles
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.classList.remove('ring-2', 'ring-indigo-500');
+    });
+    event.target.classList.add('ring-2', 'ring-indigo-500');
+}
+
 function confirmWipeAllTasks() {
     if (tasks.length === 0) {
         showNotification('No tasks to wipe', 'info');
@@ -112,17 +126,6 @@ function wipeAllTasks() {
     renderTasks();
     updateStatistics();
     showNotification(`Successfully wiped ${taskCount} tasks`, 'success');
-}
-
-function filterTasks(filter) {
-    currentFilter = filter;
-    renderTasks();
-    
-    // Update filter button styles
-    document.querySelectorAll('.filter-btn').forEach(btn => {
-        btn.classList.remove('ring-2', 'ring-indigo-500');
-    });
-    event.target.classList.add('ring-2', 'ring-indigo-500');
 }
 
 function renderTasks() {
@@ -339,380 +342,4 @@ function showNotification(message, type) {
     setTimeout(() => {
         notification.remove();
     }, 3000);
-}
-
-// Assignment Management Functions
-function handleFileUpload(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    
-    // Check file size (10MB limit)
-    if (file.size > 10 * 1024 * 1024) {
-        showNotification('File size exceeds 10MB limit', 'error');
-        event.target.value = '';
-        return;
-    }
-    
-    // Display file info
-    const fileInfo = document.getElementById('fileInfo');
-    fileInfo.innerHTML = `
-        <div class="flex items-center text-green-600">
-            <i class="fas fa-file mr-2"></i>
-            <span>${file.name} (${(file.size / 1024).toFixed(1)} KB)</span>
-        </div>
-    `;
-    
-    // Read file content
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        uploadedFileContent = e.target.result;
-        checkGenerateButton();
-        showNotification('File uploaded successfully', 'success');
-    };
-    
-    reader.onerror = function() {
-        showNotification('Error reading file', 'error');
-        uploadedFileContent = null;
-        checkGenerateButton();
-    };
-    
-    // Read based on file type
-    if (file.type === 'text/plain') {
-        reader.readAsText(file);
-    } else {
-        // For PDF, DOC, DOCX - we'll need to handle these differently
-        // For now, we'll read as text and handle errors gracefully
-        reader.readAsText(file);
-    }
-}
-
-function updateAssignment() {
-    const select = document.getElementById('assignmentSelect');
-    const assignmentNumber = select.value;
-    
-    if (!assignmentNumber) {
-        currentAssignment = null;
-        hideCurrentAssignment();
-        checkGenerateButton();
-        return;
-    }
-    
-    currentAssignment = {
-        number: assignmentNumber,
-        name: `Assignment ${assignmentNumber}`,
-        fileContent: uploadedFileContent
-    };
-    
-    saveCurrentAssignment();
-    displayCurrentAssignment();
-    checkGenerateButton();
-}
-
-function displayCurrentAssignment() {
-    if (!currentAssignment) return;
-    
-    const display = document.getElementById('currentAssignmentDisplay');
-    const text = document.getElementById('currentAssignmentText');
-    
-    display.classList.remove('hidden');
-    text.textContent = currentAssignment.name;
-}
-
-function hideCurrentAssignment() {
-    const display = document.getElementById('currentAssignmentDisplay');
-    display.classList.add('hidden');
-}
-
-function clearAssignment() {
-    currentAssignment = null;
-    uploadedFileContent = null;
-    document.getElementById('assignmentSelect').value = '';
-    document.getElementById('assignmentFile').value = '';
-    document.getElementById('fileInfo').innerHTML = '';
-    hideCurrentAssignment();
-    checkGenerateButton();
-    saveCurrentAssignment();
-    showNotification('Assignment cleared', 'info');
-}
-
-function checkGenerateButton() {
-    const btn = document.getElementById('generateTasksBtn');
-    const apiKey = document.getElementById('geminiApiKey').value.trim();
-    btn.disabled = !(currentAssignment && uploadedFileContent && apiKey);
-}
-
-function generateTasksFromAssignment() {
-    if (!currentAssignment || !uploadedFileContent) {
-        showNotification('Please upload a file and select an assignment first', 'error');
-        return;
-    }
-    
-    const apiKey = document.getElementById('geminiApiKey').value.trim();
-    if (!apiKey) {
-        showNotification('Please enter your Gemini API key', 'error');
-        document.getElementById('geminiApiKey').focus();
-        return;
-    }
-    
-    // Validate API key format
-    if (!apiKey.startsWith('AIza')) {
-        showNotification('Invalid API key format. Gemini keys start with "AIza"', 'error');
-        return;
-    }
-    
-    // Save API key
-    geminiApiKey = apiKey;
-    localStorage.setItem('geminiApiKey', geminiApiKey);
-    
-    // Show processing state
-    setGenerateButtonState('processing');
-    
-    // Call Gemini API
-    callGeminiAPI(uploadedFileContent, currentAssignment.number);
-}
-
-async function callGeminiAPI(fileContent, assignmentNumber) {
-    // Limit content to first 5000 characters to prevent token issues
-    const truncatedContent = fileContent.length > 5000 ? fileContent.substring(0, 5000) + "..." : fileContent;
-    
-    const prompt = `You are analyzing an assignment document to create a manageable set of tasks for a 4-person team.
-
-Assignment Number: ${assignmentNumber}
-
-Document Content (truncated if too long):
-${truncatedContent}
-
-CRITICAL INSTRUCTIONS:
-1. Generate ONLY 5-10 meaningful tasks total
-2. Each task must be a complete, actionable activity
-3. DO NOT create tasks for individual letters, words, or sentences
-4. Focus on major assignment components, sections, or requirements
-5. Group related work into single tasks
-
-Examples of GOOD tasks:
-- "Write the introduction section (Assignment 1.1)"
-- "Complete research for literature review"
-- "Create PowerPoint slides for presentation"
-- "Review and edit final draft"
-
-Examples of BAD tasks (DO NOT create these):
-- "Write letter 'a'"
-- "Read word 'the'"
-- "Complete sentence one"
-- "Process paragraph 2"
-
-Please:
-1. Identify the main assignment requirements
-2. Break down into 5-10 major tasks (not micro-tasks)
-3. Assign each task to one team member (distribute workload evenly)
-4. Include assignment references where applicable
-5. Make tasks specific but comprehensive
-
-Return ONLY this JSON format (no extra text):
-{
-  "tasks": [
-    {
-      "description": "Complete research and literature review for Assignment 1",
-      "assignee": "Tristan",
-      "priority": "high"
-    },
-    {
-      "description": "Write introduction and methodology sections",
-      "assignee": "Aidan", 
-      "priority": "high"
-    }
-  ]
-}`;
-
-    try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${geminiApiKey}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                contents: [{
-                    parts: [{
-                        text: prompt
-                    }]
-                }]
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error(`API Error: ${response.status} ${response.statusText}`);
-        }
-
-        const data = await response.json();
-        const generatedText = data.candidates[0].content.parts[0].text;
-        
-        // Parse JSON from response
-        const jsonMatch = generatedText.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-            throw new Error('Could not parse AI response');
-        }
-        
-        const aiResponse = JSON.parse(jsonMatch[0]);
-        
-        // Validate and limit tasks
-        if (!aiResponse.tasks || !Array.isArray(aiResponse.tasks)) {
-            throw new Error('Invalid AI response format');
-        }
-        
-        // Limit to maximum 10 tasks
-        const limitedTasks = aiResponse.tasks.slice(0, 10);
-        
-        // Convert to our task format
-        const generatedTasks = limitedTasks.map((task, index) => ({
-            id: Date.now() + index,
-            text: `[Assignment ${assignmentNumber}] ${task.description}`,
-            assignee: task.assignee || 'Unassigned',
-            completed: false,
-            createdAt: new Date().toISOString(),
-            isGenerated: true,
-            priority: task.priority || 'medium'
-        }));
-        
-        // Add tasks to the list
-        generatedTasks.forEach(task => {
-            tasks.unshift(task);
-        });
-        
-        saveTasks();
-        renderTasks();
-        updateStatistics();
-        
-        showNotification(`AI generated ${generatedTasks.length} meaningful tasks for Assignment ${assignmentNumber}`, 'success');
-        setGenerateButtonState('ready');
-        
-    } catch (error) {
-        console.error('Gemini API Error Details:', {
-            message: error.message,
-            status: error.status,
-            apiKey: geminiApiKey ? `${geminiApiKey.substring(0, 10)}...` : 'missing',
-            endpoint: `https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent`
-        });
-        
-        let errorMessage = error.message;
-        if (error.message.includes('404')) {
-            errorMessage = 'API endpoint not found. Check if the API key is valid and has Gemini API access.';
-        } else if (error.message.includes('403')) {
-            errorMessage = 'API key is invalid or lacks permissions. Please check your API key.';
-        } else if (error.message.includes('429')) {
-            errorMessage = 'API rate limit exceeded. Please try again later.';
-        }
-        
-        showNotification(`AI Error: ${errorMessage}`, 'error');
-        setGenerateButtonState('ready');
-    }
-}
-
-function setGenerateButtonState(state) {
-    const btn = document.getElementById('generateTasksBtn');
-    const btnText = document.getElementById('generateBtnText');
-    
-    switch(state) {
-        case 'processing':
-            btn.disabled = true;
-            btnText.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>AI Processing...';
-            break;
-        case 'ready':
-            btn.disabled = !(currentAssignment && uploadedFileContent && geminiApiKey);
-            btnText.innerHTML = '<i class="fas fa-brain mr-2"></i>Generate Tasks with AI';
-            break;
-    }
-}
-
-function toggleApiKeyVisibility() {
-    const input = document.getElementById('geminiApiKey');
-    const icon = document.getElementById('apiKeyToggleIcon');
-    
-    if (input.type === 'password') {
-        input.type = 'text';
-        icon.classList.remove('fa-eye');
-        icon.classList.add('fa-eye-slash');
-    } else {
-        input.type = 'password';
-        icon.classList.remove('fa-eye-slash');
-        icon.classList.add('fa-eye');
-    }
-}
-
-function parseAssignmentContent(content, assignmentNumber) {
-    const generatedTasks = [];
-    const teamMembers = ['Tristan', 'Aidan', 'Micheala', 'Leandro'];
-    
-    // Split content into lines and clean up
-    const lines = content.split('\n').filter(line => line.trim().length > 0);
-    
-    // Common assignment task patterns
-    const taskPatterns = [
-        /(?:task|requirement|deliverable|step|part)\s*(\d+)[.:]?\s*(.+)/i,
-        /(\d+)[.)]\s*(.+)/,
-        /(?:complete|create|implement|design|develop|write|build|test)\s+(.+)/i,
-        /(?:section|chapter|module)\s*(\d+)[.:]?\s*(.+)/i
-    ];
-    
-    lines.forEach((line, index) => {
-        let taskText = null;
-        
-        // Try to match task patterns
-        for (const pattern of taskPatterns) {
-            const match = line.match(pattern);
-            if (match) {
-                taskText = match[2] || match[1];
-                break;
-            }
-        }
-        
-        // If no pattern matched, use the line as a task if it's substantial
-        if (!taskText && line.trim().length > 10) {
-            taskText = line.trim();
-        }
-        
-        if (taskText) {
-            // Clean up the task text
-            taskText = taskText.replace(/^\d+[.)]\s*/, '').trim();
-            
-            // Assign to team member (round-robin)
-            const assignee = teamMembers[index % teamMembers.length];
-            
-            generatedTasks.push({
-                id: Date.now() + index,
-                text: `[Assignment ${assignmentNumber}] ${taskText}`,
-                assignee: assignee,
-                completed: false,
-                createdAt: new Date().toISOString(),
-                isGenerated: true
-            });
-        }
-    });
-    
-    // If no tasks were found from patterns, create some generic tasks
-    if (generatedTasks.length === 0 && content.trim().length > 50) {
-        const genericTasks = [
-            'Review assignment requirements',
-            'Create initial draft',
-            'Complete research phase',
-            'Finalize submission',
-            'Review and edit'
-        ];
-        
-        genericTasks.forEach((taskText, index) => {
-            generatedTasks.push({
-                id: Date.now() + index,
-                text: `[Assignment ${assignmentNumber}] ${taskText}`,
-                assignee: teamMembers[index % teamMembers.length],
-                completed: false,
-                createdAt: new Date().toISOString(),
-                isGenerated: true
-            });
-        });
-    }
-    
-    return generatedTasks;
-}
-
-function saveCurrentAssignment() {
-    localStorage.setItem('currentAssignment', JSON.stringify(currentAssignment));
 }
